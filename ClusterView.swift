@@ -1,6 +1,11 @@
 import SwiftUI
 import CoreData
 
+//struct FilterParameters {
+//    var selectedCategories: Set<String>
+//    var selectedParams: [String: Set<String>]
+//}
+
 struct ClusterContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @FetchRequest(
@@ -15,6 +20,8 @@ struct ClusterContentView: View {
     @State private var selectedItem: ClusterItemEntity?
     @State private var showItemDetail = false
     
+    var filterParams: FilterParameters? = nil
+    
     enum Tab: Equatable {
         case coins, banknotes, custom(CustomCategory)
         
@@ -26,14 +33,31 @@ struct ClusterContentView: View {
     
     var filteredItems: [ClusterItemEntity] {
         items.filter { item in
-            switch selectedTab {
-            case .coins:
-                return item.category == ItemCategory.coin.rawValue
-            case .banknotes:
-                return item.category == ItemCategory.banknote.rawValue
-            case .custom(let category):
-                return item.category == category.name
+            // Eğer filterParams nil ise, mevcut sekmeye göre filtrele
+            guard let filter = filterParams else {
+                switch selectedTab {
+                case .coins:
+                    return item.category == ItemCategory.coin.rawValue
+                case .banknotes:
+                    return item.category == ItemCategory.banknote.rawValue
+                case .custom(let category):
+                    return item.category == category.name
+                }
             }
+            // Kategori filtresi
+            guard filter.selectedCategories.contains(item.category ?? "") else { return false }
+            // Parametreler (ör: Country, Year, Collection, custom fields)
+            for (field, values) in filter.selectedParams {
+                // Statik alanlar
+                if field == "Country", let country = item.country, !values.contains(country) { return false }
+                if field == "Year", item.year != 0, !values.contains("\(item.year)") { return false }
+                if field == "Collection", let collection = item.collection, !values.contains(collection) { return false }
+                // Custom alanlar
+                if let collection = item.collection,
+                   let dict = try? JSONDecoder().decode([String: String].self, from: Data(collection.utf8)),
+                   let val = dict[field], !values.contains(val) { return false }
+            }
+            return true
         }
     }
     
@@ -116,6 +140,7 @@ struct ClusterContentView: View {
                 // Item grid
                 if filteredItems.isEmpty {
                     VStack(spacing: 16) {
+                        Spacer()
                         Image(systemName: "xmark.circle")
                             .resizable()
                             .frame(width: 80, height: 80)
@@ -125,6 +150,7 @@ struct ClusterContentView: View {
                             .foregroundColor(.gray)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
+                        Spacer()
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 40)
@@ -651,6 +677,8 @@ struct ItemDetailSheetView: View {
         }
     }
 }
+
+
 
 
 
